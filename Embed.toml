@@ -1,0 +1,18 @@
+[default.general]
+chip = "RP2040"
+
+[default.reset]
+# halt_afterwards = true
+
+[default.rtt]
+enabled = true
+#log_enabled = true
+channels = [
+    { up = 0, down = 0, name = "debug", format = "Defmt" }
+]
+
+[default.flashing]
+enabled = false
+
+[default.gdb]
+enabled = true

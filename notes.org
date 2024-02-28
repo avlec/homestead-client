@@ -1,0 +1,18 @@
+* Device Behaviour
+
+1. Startup
+2. Check in with server by sending device info
+   - hwaddr
+   - capabilities
+3. Push values
+This is probably good to do first as the server can process data if needed before we get the values.
+4. Get values
+
+* TODO List
+- [ ] Refactor out generic request logic
+- [ ] put display logic in seperate task from http client logic
+- [ ] Display values recieved from the server
+- [ ] Startup log on display atop splash image
+
+* Local Network Configuration
+Would like to have a DNS server running locally to provide named hosts for the connecting devices to use.
