@@ -1,34 +1,28 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
-#![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
 
+use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cyw43_pio::PioSpi;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_net::dns::DnsSocket;
 use embassy_net::tcp::client::{TcpClient, TcpClientState};
-//use embassy_net::tcp::TcpSocket;
 use embassy_net::{Config, EthernetAddress, HardwareAddress, Stack, StackResources};
 use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::peripherals::{DMA_CH0, PIN_23, PIN_25, PIO0, PIO1};
+use embassy_rp::peripherals::{DMA_CH0, PIO0, PIO1};
 use embassy_rp::pio::{InterruptHandler, Pio};
-use embassy_rp::spi;
-use embassy_rp::spi::Spi;
 use embassy_time::{Delay, Duration, Timer};
 use embedded_graphics::mono_font::ascii::FONT_8X13 as font_size;
 use embedded_graphics::mono_font::MonoTextStyleBuilder;
-use embedded_graphics::pixelcolor::{self, BinaryColor};
-use embedded_graphics::primitives::{PrimitiveStyleBuilder, Rectangle, StyledDrawable};
+use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::text::Text;
-use embedded_graphics::{
-    image::Image,
-    prelude::*,
-    primitives::{Line, PrimitiveStyle},
-};
-use epd_waveshare::{color::*, epd3in7::*, prelude::*};
+// use embedded_graphics::image::Image;
+use embedded_graphics::prelude::*;
+use embedded_hal_bus::spi::ExclusiveDevice;
+use epd_waveshare::{epd3in7::*, prelude::*};
 use heapless::{String, Vec};
 use static_cell::make_static;
 use {defmt_rtt as _, panic_probe as _};
@@ -49,10 +43,10 @@ const WIFI_PASSWORD: &'static str = core::env!("WIFI_PASSWORD");
 #[embassy_executor::task]
 async fn wifi_task(
     runner: cyw43::Runner<
-        'static,
-        Output<'static, PIN_23>,
-        PioSpi<'static, PIN_25, PIO0, 0, DMA_CH0>,
-    >,
+            'static,
+        Output<'static>,
+        PioSpi<'static, PIO0, 0, DMA_CH0>
+            >,
 ) -> ! {
     runner.run().await
 }
@@ -134,18 +128,20 @@ async fn main(spawner: Spawner) {
         p.DMA_CH0,
     );
 
-    let mut spi_d_cfg = spi::Config::default();
+    let mut spi_d_cfg = embassy_rp::spi::Config::default();
     spi_d_cfg.frequency = 4000000;
-    let mut spi_d = Spi::new_blocking_txonly(p.SPI1, p.PIN_10, p.PIN_11, spi_d_cfg);
-
-    let cs = Output::new(p.PIN_9, Level::Low);
-    let busy = Input::new(p.PIN_13, Pull::None);
-    let dc = Output::new(p.PIN_8, Level::Low);
-    let rst = Output::new(p.PIN_12, Level::Low);
+    let mut spi_d = embassy_rp::spi::Spi::new_blocking_txonly(p.SPI1, p.PIN_10, p.PIN_11, spi_d_cfg);
     let mut delay = Delay;
-    let mut epd = EPD3in7::new(&mut spi_d, cs, busy, dc, rst, &mut delay, None).unwrap();
+    let cs_d = Output::new(p.PIN_9, Level::Low);
+    let mut spidev_d = ExclusiveDevice::new(spi_d, cs_d, delay);
+
+    let busy_d = Input::new(p.PIN_13, Pull::None);
+    let dc_d = Output::new(p.PIN_8, Level::Low);
+    let rst_d = Output::new(p.PIN_12, Level::Low);
+    let mut epd = EPD3in7::new(&mut spidev_d, busy_d, dc_d, rst_d, &mut delay, None).unwrap();
 
     let mut display = Display3in7::default();
+
 
     let splash_bytes = include_bytes!("../splashnewbw.bmp");
     let splash_bmp = tinybmp::Bmp::<BinaryColor>::from_slice(splash_bytes).unwrap();
@@ -154,15 +150,15 @@ async fn main(spawner: Spawner) {
         Err(e) => error!("failed to render splash screen {:?}", e),
     }
 
-    epd.clear_frame(&mut spi_d, &mut delay).unwrap();
-    epd.update_and_display_frame(&mut spi_d, &display.buffer(), &mut delay)
+    epd.clear_frame(&mut spidev_d, &mut delay).unwrap();
+    epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delay)
         .unwrap();
 
     info!("displayed...");
 
-    match epd.sleep(&mut spi_d, &mut delay) {
+    match epd.sleep(&mut spidev_d, &mut delay) {
         Ok(_) => (),
-        Err(e) => error!("can't sleep display {}", e),
+        Err(e) => error!("can't sleep display"),
     }
 
     let state = make_static!(cyw43::State::new());
@@ -238,7 +234,7 @@ async fn main(spawner: Spawner) {
                 .send(&mut rx_buffer)
                 .await
             {
-                Ok(response) => info!("recieved response {}", response.body().unwrap().body_buf),
+                Ok(response) => info!("recieved response {}", response),
                 Err(_) => error!("sending request"),
             },
             Err(_) => error!("formatting the request failed..."),
@@ -292,7 +288,7 @@ async fn main(spawner: Spawner) {
                         // TODO json to Resources
                         let length = response.content_length.unwrap_or(0);
                         match serde_json_core::from_slice::<Vec<ContextResource, 8>>(
-                            &response.body().unwrap().body_buf[0..length],
+                            &response.body().body_buf[0..length],
                         ) {
                             Ok(t) => info!("recieved response {:?}", t),
                             Err(e) => info!("{:?}", e),
@@ -311,15 +307,15 @@ async fn main(spawner: Spawner) {
 
         let text_style = MonoTextStyleBuilder::new()
             .font(&font_size)
-            .text_color(Color::Black)
-            .background_color(Color::White)
+            .text_color(BinaryColor::On)
+            .background_color(BinaryColor::Off)
             .build();
 
-        let mut data: String<64> = String::from("Top value: ");
+        let mut data: String<64> = String::try_from("Top value: ").unwrap();
         let formatted_data = serde_json_core::to_string::<Value, 32>(&value1).unwrap_or_default();
         let _ = data.push_str(formatted_data.as_str());
         let _ = Text::new(data.as_str(), Point::new(10, 200), text_style).draw(&mut display);
-        let mut data: String<64> = String::from("Middle value: ");
+        let mut data: String<64> = String::try_from("Middle value: ").unwrap();
         let _ =
             data.push_str(&serde_json_core::to_string::<Value, 32>(&value2).unwrap_or_default());
         let _ = Text::new(
@@ -329,7 +325,7 @@ async fn main(spawner: Spawner) {
         )
         .draw(&mut display);
 
-        let mut data: String<64> = String::from("Bottom value: ");
+        let mut data: String<64> = String::try_from("Bottom value: ").unwrap();
         let _ =
             data.push_str(&serde_json_core::to_string::<Value, 32>(&value3).unwrap_or_default());
         let _ = Text::new(
@@ -339,25 +335,17 @@ async fn main(spawner: Spawner) {
         )
         .draw(&mut display);
 
-        match epd.wake_up(&mut spi_d, &mut delay) {
+        epd.wake_up(&mut spidev_d, &mut delay).unwrap_or_else(|_| error!("can't wake up display"));
+
+        match epd.clear_frame(&mut spidev_d, &mut delay) {
             Ok(_) => (),
-            Err(e) => error!("can't wake up display {}", e),
+            Err(_) => error!("can't clear display"),
         }
 
-        match epd.clear_frame(&mut spi_d, &mut delay) {
-            Ok(_) => (),
-            Err(e) => error!("can't clear display {}", e),
-        }
+        epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delay).unwrap_or_else(|_| error!("can't update and display"));
 
-        match epd.update_and_display_frame(&mut spi_d, &display.buffer(), &mut delay) {
-            Ok(_) => (),
-            Err(e) => error!("can't update and display {}", e),
-        };
+        epd.sleep(&mut spidev_d, &mut delay).unwrap_or_else(|_| error!("can't sleep display"));
 
-        match epd.sleep(&mut spi_d, &mut delay) {
-            Ok(_) => (),
-            Err(e) => error!("can't sleep display {}", e),
-        }
 
         Timer::after(Duration::from_secs(30)).await;
         delay.delay_ms(30 * 1000);
