@@ -17,9 +17,7 @@ use embassy_time::{Delay, Duration, Timer};
 use embedded_graphics::mono_font::ascii::FONT_8X13 as font_size;
 use embedded_graphics::mono_font::MonoTextStyleBuilder;
 use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::text::Text;
-use embedded_graphics::image::Image;
-use embedded_graphics::prelude::*;
+use embedded_graphics::{prelude::*, image::Image, text::Text};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use epd_waveshare::{epd3in7::*, prelude::*};
 use heapless::{String, Vec};
@@ -129,8 +127,8 @@ async fn main(spawner: Spawner) {
 
     let mut spi_d_cfg = embassy_rp::spi::Config::default();
     spi_d_cfg.frequency = 4000000;
-    let mut spi_d = embassy_rp::spi::Spi::new_blocking_txonly(p.SPI1, p.PIN_10, p.PIN_11, spi_d_cfg);
-    let mut delay = Delay;
+    let spi_d = embassy_rp::spi::Spi::new_blocking_txonly(p.SPI1, p.PIN_10, p.PIN_11, spi_d_cfg);
+    let delay = Delay;
     let cs_d = Output::new(p.PIN_9, Level::Low);
     let mut spidev_d = ExclusiveDevice::new(spi_d, cs_d, delay);
 
@@ -145,10 +143,7 @@ async fn main(spawner: Spawner) {
 
     let splash_bytes = include_bytes!("../splashnewbw.bmp");
     let splash_bmp = tinybmp::Bmp::<BinaryColor>::from_slice(splash_bytes).unwrap();
-    // match Image::new(&splash_bmp, Point::new(0, 0)).draw(&mut display.color_converted()) {
-    //     Ok(_) => info!("rendered splash screen"),
-    //     Err(e) => error!("failed to render splash screen {:?}", e),
-    // }
+    Image::new(&splash_bmp, Point::zero()).draw(&mut display.color_converted()).unwrap_or_else(|_| error!("failed to render splash screen"));
 
     epd.clear_frame(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't clear frame"));
     epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delayns)
@@ -240,16 +235,14 @@ async fn main(spawner: Spawner) {
         Err(_) => error!("creating request"),
     };
 
-    let mut loopctr = 0;
-
     // TODO repr these in the device structure
     // have these values being present there translate into
     // sending consumes to the server
     // and have the values get updated by the responses recieved
     // from the server
-    let mut value1: Value = Value::Real(42.0);
-    let mut value2: Value = Value::Real(100.0);
-    let mut value3: Value = Value::Real(-32.0);
+    let value1: Value = Value::Real(42.0);
+    let value2: Value = Value::Real(100.0);
+    let value3: Value = Value::Real(-32.0);
 
     // let style = PrimitiveStyleBuilder::new()
     //     .stroke_color(Color::Black)
@@ -304,21 +297,22 @@ async fn main(spawner: Spawner) {
 
         let text_style = MonoTextStyleBuilder::new()
             .font(&font_size)
-            .text_color(BinaryColor::On)
-            .background_color(BinaryColor::Off)
+            .text_color(Color::Black)
+            .background_color(Color::White)
             .build();
 
         let mut data: String<64> = String::try_from("Top value: ").unwrap();
         let formatted_data = serde_json_core::to_string::<Value, 32>(&value1).unwrap_or_default();
         let _ = data.push_str(formatted_data.as_str());
-        // let _ = Text::new(data.as_str(), Point::new(10, 200), text_style).draw(&mut display);
+        let _ = Text::new(data.as_str(), Point::new(10, 200), text_style).draw(&mut display);
+
         let mut data: String<64> = String::try_from("Middle value: ").unwrap();
         let _ = data.push_str(&serde_json_core::to_string::<Value, 32>(&value2).unwrap_or_default());
-        // let _ = Text::new(data.as_str(), Point::new(10, 200 + (1 * text_height * 2) as i32), text_style).draw(&mut display);
+        let _ = Text::new(data.as_str(), Point::new(10, 200 + (1 * text_height * 2) as i32), text_style).draw(&mut display);
 
         let mut data: String<64> = String::try_from("Bottom value: ").unwrap();
         let _ = data.push_str(&serde_json_core::to_string::<Value, 32>(&value3).unwrap_or_default());
-        // let _ = Text::new(data.as_str(), Point::new(10, 200 + (2 * text_height * 2) as i32), text_style).draw(&mut display);
+        let _ = Text::new(data.as_str(), Point::new(10, 200 + (2 * text_height * 2) as i32), text_style).draw(&mut display);
 
         epd.wake_up(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't wake up display"));
 
