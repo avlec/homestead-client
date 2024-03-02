@@ -3,7 +3,6 @@
 #![feature(type_alias_impl_trait)]
 #![allow(incomplete_features)]
 
-use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cyw43_pio::PioSpi;
 use defmt::*;
 use embassy_executor::Spawner;
@@ -19,7 +18,7 @@ use embedded_graphics::mono_font::ascii::FONT_8X13 as font_size;
 use embedded_graphics::mono_font::MonoTextStyleBuilder;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::text::Text;
-// use embedded_graphics::image::Image;
+use embedded_graphics::image::Image;
 use embedded_graphics::prelude::*;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use epd_waveshare::{epd3in7::*, prelude::*};
@@ -138,28 +137,26 @@ async fn main(spawner: Spawner) {
     let busy_d = Input::new(p.PIN_13, Pull::None);
     let dc_d = Output::new(p.PIN_8, Level::Low);
     let rst_d = Output::new(p.PIN_12, Level::Low);
-    let mut epd = EPD3in7::new(&mut spidev_d, busy_d, dc_d, rst_d, &mut delay, None).unwrap();
+    let mut delayns = Delay;
+    let mut epd = EPD3in7::new(&mut spidev_d, busy_d, dc_d, rst_d, &mut delayns, None).unwrap();
 
     let mut display = Display3in7::default();
 
 
     let splash_bytes = include_bytes!("../splashnewbw.bmp");
     let splash_bmp = tinybmp::Bmp::<BinaryColor>::from_slice(splash_bytes).unwrap();
-    match Image::new(&splash_bmp, Point::new(0, 0)).draw(&mut display.color_converted()) {
-        Ok(_) => info!("rendered splash screen"),
-        Err(e) => error!("failed to render splash screen {:?}", e),
-    }
+    // match Image::new(&splash_bmp, Point::new(0, 0)).draw(&mut display.color_converted()) {
+    //     Ok(_) => info!("rendered splash screen"),
+    //     Err(e) => error!("failed to render splash screen {:?}", e),
+    // }
 
-    epd.clear_frame(&mut spidev_d, &mut delay).unwrap();
-    epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delay)
-        .unwrap();
+    epd.clear_frame(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't clear frame"));
+    epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delayns)
+        .unwrap_or_else(|_| error!("can't update display"));
 
     info!("displayed...");
 
-    match epd.sleep(&mut spidev_d, &mut delay) {
-        Ok(_) => (),
-        Err(e) => error!("can't sleep display"),
-    }
+    epd.sleep(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't sleep display"));
 
     let state = make_static!(cyw43::State::new());
     let (net_device, mut control, runner) = cyw43::new(state, pwr, spi_w, fw).await;
@@ -314,40 +311,24 @@ async fn main(spawner: Spawner) {
         let mut data: String<64> = String::try_from("Top value: ").unwrap();
         let formatted_data = serde_json_core::to_string::<Value, 32>(&value1).unwrap_or_default();
         let _ = data.push_str(formatted_data.as_str());
-        let _ = Text::new(data.as_str(), Point::new(10, 200), text_style).draw(&mut display);
+        // let _ = Text::new(data.as_str(), Point::new(10, 200), text_style).draw(&mut display);
         let mut data: String<64> = String::try_from("Middle value: ").unwrap();
-        let _ =
-            data.push_str(&serde_json_core::to_string::<Value, 32>(&value2).unwrap_or_default());
-        let _ = Text::new(
-            data.as_str(),
-            Point::new(10, 200 + (1 * text_height * 2) as i32),
-            text_style,
-        )
-        .draw(&mut display);
+        let _ = data.push_str(&serde_json_core::to_string::<Value, 32>(&value2).unwrap_or_default());
+        // let _ = Text::new(data.as_str(), Point::new(10, 200 + (1 * text_height * 2) as i32), text_style).draw(&mut display);
 
         let mut data: String<64> = String::try_from("Bottom value: ").unwrap();
-        let _ =
-            data.push_str(&serde_json_core::to_string::<Value, 32>(&value3).unwrap_or_default());
-        let _ = Text::new(
-            data.as_str(),
-            Point::new(10, 200 + (2 * text_height * 2) as i32),
-            text_style,
-        )
-        .draw(&mut display);
+        let _ = data.push_str(&serde_json_core::to_string::<Value, 32>(&value3).unwrap_or_default());
+        // let _ = Text::new(data.as_str(), Point::new(10, 200 + (2 * text_height * 2) as i32), text_style).draw(&mut display);
 
-        epd.wake_up(&mut spidev_d, &mut delay).unwrap_or_else(|_| error!("can't wake up display"));
+        epd.wake_up(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't wake up display"));
 
-        match epd.clear_frame(&mut spidev_d, &mut delay) {
-            Ok(_) => (),
-            Err(_) => error!("can't clear display"),
-        }
+        epd.clear_frame(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't clear display"));
 
-        epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delay).unwrap_or_else(|_| error!("can't update and display"));
+        epd.update_and_display_frame(&mut spidev_d, &display.buffer(), &mut delayns).unwrap_or_else(|_| error!("can't update and display"));
 
-        epd.sleep(&mut spidev_d, &mut delay).unwrap_or_else(|_| error!("can't sleep display"));
+        epd.sleep(&mut spidev_d, &mut delayns).unwrap_or_else(|_| error!("can't sleep display"));
 
 
         Timer::after(Duration::from_secs(30)).await;
-        delay.delay_ms(30 * 1000);
     }
 }
