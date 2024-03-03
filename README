@@ -1,2 +1,14 @@
 # Homestead Client
 A device on your homestead.
+
+## Getting Started
+1. Install nightly, toolchain, and probe-rs.
+``` shell
+rustup toolchain install nightly
+rustup override set nightly
+rustup target add thumbv6m-none-eabi
+cargo install probe-run
+cargo install --features=cli probe-rs
+```
+2. Clone down the embassy repo and update the paths in main.rs.
+Works for now but looking for a way to improve this.
