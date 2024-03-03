@@ -34,6 +34,7 @@ bind_interrupts!(struct Irqs {
 
 const WIFI_NETWORK: &'static str = core::env!("WIFI_SSID");
 const WIFI_PASSWORD: &'static str = core::env!("WIFI_PASSWORD");
+const URL: &'static str = core::env!("URL");
 
 #[embassy_executor::task]
 async fn wifi_task(
@@ -224,11 +225,10 @@ async fn main(spawner: Spawner) {
 
     let mut rx_buffer = [0; 4096];
 
-    let url: &'static str = core::env!("URL");
-    info!("connection to: {}", url);
+    info!("connection to: {}", URL);
 
     info!("registering with server");
-    match client.request(reqwless::request::Method::POST, &url).await {
+    match client.request(reqwless::request::Method::POST, &URL).await {
         Ok(request) => match serde_json_core::to_string::<Device, 128>(&dev) {
             Ok(json) => match request
                 .content_type(reqwless::headers::ContentType::ApplicationJson)
@@ -279,7 +279,7 @@ async fn main(spawner: Spawner) {
 
         // TODO produce values first
         // request updates on consumed values
-        match client.request(reqwless::request::Method::GET, &url).await {
+        match client.request(reqwless::request::Method::GET, &URL).await {
             Ok(request) => match serde_json_core::to_string::<[u8; 6], 128>(&dev.hwaddr) {
                 Ok(json) => match request
                     .content_type(reqwless::headers::ContentType::ApplicationJson)
