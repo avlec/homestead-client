@@ -29,6 +29,7 @@ use reqwless::request::RequestBuilder;
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
     PIO1_IRQ_0 => InterruptHandler<PIO1>;
+    ADC_IRQ_FIFO => embassy_rp::adc::InterruptHandler;
 });
 
 const WIFI_NETWORK: &'static str = core::env!("WIFI_SSID");
@@ -57,7 +58,7 @@ pub struct Capabilities {
 }
 
 /* this device has no sensors yet */
-const PRODUCES: &[&str] = &[];
+const PRODUCES: &[&str] = &["temp"];
 
 /* this device has a display and it has these regions to display values */
 const CONSUMES: &[&str] = &["top", "middle", "bottom"];
@@ -94,6 +95,14 @@ pub struct DeviceResources {
     pub resources: Resource,
 }
 
+fn convert_to_celsius(raw_temp: u16) -> f32 {
+    // According to chapter 4.9.5. Temperature Sensor in RP2040 datasheet
+    let temp = 27.0 - (raw_temp as f32 * 3.3 / 4096.0 - 0.706) / 0.001721;
+    let sign = if temp < 0.0 { -1.0 } else { 1.0 };
+    let rounded_temp_x10: i16 = ((temp * 10.0) + 0.5 * sign) as i16;
+    (rounded_temp_x10 as f32) / 10.0
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -121,6 +130,9 @@ async fn main(spawner: Spawner) {
         p.PIN_29,
         p.DMA_CH0,
     );
+
+    let mut adc = embassy_rp::adc::Adc::new(p.ADC, Irqs, embassy_rp::adc::Config::default());
+    let mut ts = embassy_rp::adc::Channel::new_temp_sensor(p.ADC_TEMP_SENSOR);
 
     let mut spi_d_cfg = embassy_rp::spi::Config::default();
     spi_d_cfg.frequency = 4000000;
@@ -262,6 +274,9 @@ async fn main(spawner: Spawner) {
     // .draw_styled(&style, &mut display);
 
     loop {
+        // TODO tune the temp reading, value of ~29 in a cool room...
+        info!("temperature reading of {}", convert_to_celsius(adc.read(&mut ts).await.unwrap_or_default()));
+
         // TODO produce values first
         // request updates on consumed values
         match client.request(reqwless::request::Method::GET, &url).await {
