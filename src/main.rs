@@ -215,9 +215,10 @@ async fn main(spawner: Spawner) {
 
     let mut rx_buffer = [0; 4096];
 
-    info!("httpclient sending the message");
-    let url = "http://192.168.1.156:1234/v1/device";
-    // register device on startup
+    let url: &'static str = core::env!("URL");
+    info!("connection to: {}", url);
+
+    info!("registering with server");
     match client.request(reqwless::request::Method::POST, &url).await {
         Ok(request) => match serde_json_core::to_string::<Device, 128>(&dev) {
             Ok(json) => match request
