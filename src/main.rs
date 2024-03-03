@@ -250,9 +250,9 @@ async fn main(spawner: Spawner) {
     // sending consumes to the server
     // and have the values get updated by the responses recieved
     // from the server
-    let value1: Value = Value::Real(42.0);
-    let value2: Value = Value::Real(100.0);
-    let value3: Value = Value::Real(-32.0);
+    let mut value1: Value = Value::Real(42.0);
+    let mut value2: Value = Value::Real(100.0);
+    let mut value3: Value = Value::Real(-32.0);
 
     // let style = PrimitiveStyleBuilder::new()
     //     .stroke_color(Color::Black)
@@ -290,10 +290,25 @@ async fn main(spawner: Spawner) {
                     Ok(response) => {
                         // TODO json to Resources
                         let length = response.content_length.unwrap_or(0);
-                        match serde_json_core::from_slice::<Vec<ContextResource, 8>>(
+                        match serde_json_core::from_slice::<Vec<ContextResource, 3>>(
                             &response.body().body_buf[0..length],
                         ) {
-                            Ok(t) => info!("recieved response {:?}", t),
+                            Ok((t,_)) => {
+                                info!("{:?}", t);
+                                let mut c = 1;
+                                for v in t {
+                                    match c {
+                                        1 => value1 = v.resource.value,
+                                        2 => value2 = v.resource.value,
+                                        3 => value3 = v.resource.value,
+                                        _ => info!("more than expected..."),
+                                    }
+                                    c += 1;
+                                }
+                                // v[0]["context"]
+                                // v[0]["resource"]["what"]
+                                // v[0]["resource"]["value"]
+                            },
                             Err(e) => info!("{:?}", e),
                         }
                     }
