@@ -26,11 +26,8 @@ use {defmt_rtt as _, panic_probe as _};
 
 use reqwless::request::RequestBuilder;
 
-bind_interrupts!(struct WIrqs {
+bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
-});
-
-bind_interrupts!(struct DIrqs {
     PIO1_IRQ_0 => InterruptHandler<PIO1>;
 });
 
@@ -114,7 +111,7 @@ async fn main(spawner: Spawner) {
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs_w = Output::new(p.PIN_25, Level::High);
 
-    let mut pio_w = Pio::new(p.PIO0, WIrqs);
+    let mut pio_w = Pio::new(p.PIO0, Irqs);
     let spi_w = PioSpi::new(
         &mut pio_w.common,
         pio_w.sm0,
