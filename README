@@ -1,8 +1,16 @@
 # Homestead Client
 A device on your homestead.
 
+## Known Problems
+
+Release builds currently don't seem to get past the splash screen.
+
 ## Getting Started
+
+Get ready to build and flash.
+
 1. Install nightly, toolchain, and probe-rs.
+
 ``` shell
 rustup toolchain install nightly
 rustup override set nightly
@@ -10,5 +18,19 @@ rustup target add thumbv6m-none-eabi
 cargo install probe-run
 cargo install --features=cli probe-rs
 ```
-2. Clone down the embassy repo and update the paths in main.rs.
-Works for now but looking for a way to improve this.
+
+2. Download the two Wi-Fi binary blobs from this folder for flashing to the board.
+https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
+Flash them with `probe-rs` as described below.
+
+``` shell
+probe-rs download --format bin --chip RP2040 --base-address 0x101C0000 43439A0.bin
+probe-rs download --format bin --chip RP2040 --base-address 0x101f8400 43439A0_clm.bin 
+```
+
+3. Set the following environment variables in .cargo/config.toml
+  - WIFI_SSID
+  - WIFI_PASSWORD
+  - URL is that of the homestead-server 
+4. Good to go. Project can now build via `cargo build` and can run with `cargo run` to flash and get logs from the board.
+Debugging performed via `cargo embed`. Programming devices via `cargo flash`.
