@@ -7,8 +7,11 @@ chip = "RP2040"
 [default.rtt]
 enabled = true
 #log_enabled = true
-channels = [
-    { up = 0, down = 0, name = "debug", format = "Defmt" }
+up_channels = [
+    { channel = 0, mode = "BlockIfFull", format = "Defmt", show_location = true }
+]
+down_channels = [
+    { channel = 0, mode = "BlockIfFull" }
 ]
 
 [default.flashing]

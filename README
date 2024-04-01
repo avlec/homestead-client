@@ -3,20 +3,21 @@ A device on your homestead.
 
 ## Known Problems
 
-Release builds currently don't seem to get past the splash screen.
+- Release builds currently don't seem to get past the splash screen.
+- https://github.com/embassy-rs/embassy/issues/1736 makes developing this project a pain. Workaround for once the device gets in this stuck state is holding the BOOTSEL button while plugging it in.
 
 ## Getting Started
 
 Get ready to build and flash.
 
-1. Install nightly, toolchain, and probe-rs.
+1. Install nightly, the device toolchain, and probe-rs (works pre 0.23 Embed.toml syntax is different).
 
 ``` shell
 rustup toolchain install nightly
 rustup override set nightly
 rustup target add thumbv6m-none-eabi
 cargo install probe-run
-cargo install --features=cli probe-rs
+cargo install --features=cli probe-rs@0.23
 ```
 
 2. Download the two Wi-Fi binary blobs from this folder for flashing to the board.
