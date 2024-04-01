@@ -9,6 +9,7 @@ use embassy_executor::Spawner;
 use embassy_net::dns::DnsSocket;
 use embassy_net::tcp::client::{TcpClient, TcpClientState};
 use embassy_net::{Config, EthernetAddress, HardwareAddress, Stack, StackResources};
+use embassy_rp::adc::{Adc, Async, Channel};
 use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::peripherals::{DMA_CH0, PIO0, PIO1};
@@ -104,6 +105,15 @@ fn convert_to_celsius(raw_temp: u16) -> f32 {
     (rounded_temp_x10 as f32) / 10.0
 }
 
+#[embassy_executor::task]
+async fn temp_read_task(mut adc: Adc<'static, Async>, mut ts: Channel<'static>) -> ! {
+    loop {
+        let temp = convert_to_celsius(adc.read(&mut ts).await.unwrap_or_default());
+        info!("temp {:?}", temp);
+        Timer::after(Duration::from_secs(30)).await;
+    }
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -125,8 +135,9 @@ async fn main(spawner: Spawner) {
         p.DMA_CH0,
     );
 
-    let mut adc = embassy_rp::adc::Adc::new(p.ADC, Irqs, embassy_rp::adc::Config::default());
-    let mut ts = embassy_rp::adc::Channel::new_temp_sensor(p.ADC_TEMP_SENSOR);
+    let adc = embassy_rp::adc::Adc::new(p.ADC, Irqs, embassy_rp::adc::Config::default());
+    let ts = embassy_rp::adc::Channel::new_temp_sensor(p.ADC_TEMP_SENSOR);
+    unwrap!(spawner.spawn(temp_read_task(adc, ts)));
 
     let mut spi_d_cfg = embassy_rp::spi::Config::default();
     spi_d_cfg.frequency = 4000000;
@@ -267,9 +278,6 @@ async fn main(spawner: Spawner) {
     // .draw_styled(&style, &mut display);
 
     loop {
-        // TODO tune the temp reading, value of ~29 in a cool room...
-        info!("temperature reading of {}", convert_to_celsius(adc.read(&mut ts).await.unwrap_or_default()));
-
         // TODO produce values first
         // request updates on consumed values
         match client.request(reqwless::request::Method::GET, &URL).await {
