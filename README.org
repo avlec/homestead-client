@@ -1,37 +1,36 @@
-# Homestead Client
+* Homestead Client
 A device on your homestead.
 
-## Known Problems
+** Known Problems
 
-- Release builds currently don't seem to get past the splash screen.
-- https://github.com/embassy-rs/embassy/issues/1736 makes developing this project a pain. Workaround for once the device gets in this stuck state is holding the BOOTSEL button while plugging it in.
+- Release builds currently don't seem to make it past displaying the initial startup message. The problem pertains to the EPD ~sleep~ or ~wake_up~.
 
-## Getting Started
+** Getting Started
 
 Get ready to build and flash.
 
-1. Install nightly, the device toolchain, and probe-rs (works pre 0.23 Embed.toml syntax is different).
+1. Install nightly, the device toolchain, and probe-rs.
 
-``` shell
+#+begin_src shell
 rustup toolchain install nightly
 rustup override set nightly
 rustup target add thumbv6m-none-eabi
 cargo install probe-run
-cargo install --features=cli probe-rs@0.23
-```
+cargo install --features=cli probe-rs
+#+end_src
 
 2. Download the two Wi-Fi binary blobs from this folder for flashing to the board.
 https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
 Flash them with `probe-rs` as described below.
 
-``` shell
+#+begin_src shell
 probe-rs download --format bin --chip RP2040 --base-address 0x101C0000 43439A0.bin
-probe-rs download --format bin --chip RP2040 --base-address 0x101f8400 43439A0_clm.bin 
-```
+probe-rs download --format bin --chip RP2040 --base-address 0x101f8400 43439A0_clm.bin
+#+end_src
 
 3. Set the following environment variables in .cargo/config.toml
-  - WIFI_SSID
-  - WIFI_PASSWORD
-  - URL is that of the homestead-server 
+  - ~WIFI_SSID~
+  - ~WIFI_PASSWORD~
+  - ~URL~ is that of the homestead-server (https://github.com/avlec/homestead-server)
 4. Good to go. Project can now build via `cargo build` and can run with `cargo run` to flash and get logs from the board.
 Debugging performed via `cargo embed`. Programming devices via `cargo flash`.

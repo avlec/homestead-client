@@ -6,7 +6,9 @@ chip = "RP2040"
 
 [default.rtt]
 enabled = true
-#log_enabled = true
+# Warning the below can cause gigabytes of data to
+# build up without regular cleaning.
+# log_enabled = true
 up_channels = [
     { channel = 0, mode = "BlockIfFull", format = "Defmt", show_location = true }
 ]
@@ -18,4 +20,4 @@ down_channels = [
 enabled = false
 
 [default.gdb]
-enabled = true
+# enabled = true

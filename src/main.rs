@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 #![allow(incomplete_features)]
 
 use cyw43::NetDriver;
@@ -26,7 +26,7 @@ use embedded_graphics::{prelude::*, image::Image, text::Text};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use epd_waveshare::{epd3in7::*, prelude::*};
 use heapless::{String, Vec};
-use static_cell::make_static;
+use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 use reqwless::request::RequestBuilder;
@@ -233,17 +233,20 @@ async fn main(spawner: Spawner) {
 
     let mut spi_d_cfg = embassy_rp::spi::Config::default();
     spi_d_cfg.frequency = 4000000;
-    let spidev = make_static!(ExclusiveDevice::new(
+    static SPIDEV : StaticCell<ExclusiveDevice<Spi<'_, SPI1, Blocking>, Output<'_>, Delay>> = StaticCell::new();
+    let spidev = SPIDEV.init(ExclusiveDevice::new(
         embassy_rp::spi::Spi::new_blocking_txonly(
             p.SPI1, p.PIN_10, p.PIN_11, spi_d_cfg
         ), Output::new(p.PIN_9, Level::Low), Delay));
 
-    let delayns = make_static!(Delay);
+    static DELAYNS : StaticCell<Delay> = StaticCell::new();
+    let delayns = DELAYNS.init(Delay{});
 
     let busy_d = Input::new(p.PIN_13, Pull::None);
     let dc_d = Output::new(p.PIN_8, Level::Low);
     let rst_d = Output::new(p.PIN_12, Level::Low);
-    let epd = make_static!(EPD3in7::new(spidev, busy_d, dc_d, rst_d, delayns, None).unwrap());
+    static EPD : StaticCell<EPD3in7<ExclusiveDevice<Spi<'_, SPI1, Blocking>, Output<'_>, Delay>, Input<'_>, Output<'_>, Output<'_>, Delay>> = StaticCell::new();
+    let epd = EPD.init(EPD3in7::new(spidev, busy_d, dc_d, rst_d, delayns, None).unwrap());
 
     info!("made the display variables, spawning task");
 
@@ -273,7 +276,8 @@ async fn main(spawner: Spawner) {
         p.DMA_CH0,
     );
 
-    let state = make_static!(cyw43::State::new());
+    static STATE : StaticCell<cyw43::State> = StaticCell::new();
+    let state = STATE.init(cyw43::State::new());
     let (net_device, mut control, runner) = cyw43::new(state, pwr, spi_w, fw).await;
     unwrap!(spawner.spawn(wifi_task(runner)));
 
@@ -288,19 +292,30 @@ async fn main(spawner: Spawner) {
     let seed = 0x0123_4567_89ab_cdef; // chosen by fair dice roll. guarenteed to be random.
 
     // Init network stack
-    let stack = &*make_static!(Stack::new(
+    static RESOURCES : StaticCell<embassy_net::StackResources<8>> = StaticCell::new();
+    static STACK : StaticCell<Stack<cyw43::NetDriver<'static>>> = StaticCell::new();
+
+    let stack = STACK.init(Stack::new(
         net_device,
         config,
-        make_static!(StackResources::<8>::new()),
+        RESOURCES.init(StackResources::<8>::new()),
         seed
     ));
-    let client_state = &*make_static!(TcpClientState::<4, 1024, 1024>::new());
 
-    let tcp = &*make_static!(TcpClient::new(&stack, &client_state));
-    let dns = &*make_static!(DnsSocket::new(&stack));
-    let client = &mut *make_static!(reqwless::client::HttpClient::new(tcp, dns));
+    static TCPCLIENTSTATE : StaticCell<TcpClientState<4, 1024, 1024>> = StaticCell::new();
+    static TCPCLIENT : StaticCell<TcpClient<cyw43::NetDriver<'static>, 4>> = StaticCell::new();
 
-    let dev = make_static!(Device {
+    static DNS : StaticCell<DnsSocket<cyw43::NetDriver<'static>>> = StaticCell::new();
+
+    let tcp = TCPCLIENT.init(TcpClient::new(stack, TCPCLIENTSTATE.init(TcpClientState::new())));
+    let dns = DNS.init(DnsSocket::new(stack));
+
+    static HTTPCLIENT : StaticCell<reqwless::client::HttpClient<TcpClient<cyw43::NetDriver<'static>, 4>, DnsSocket<cyw43::NetDriver<'static>>>> = StaticCell::new();
+    let client = HTTPCLIENT.init(reqwless::client::HttpClient::new(tcp, dns));
+
+
+    static DEV : StaticCell<Device> = StaticCell::new();
+    let dev = DEV.init(Device {
         hwaddr: match stack.hardware_address() {
             HardwareAddress::Ethernet(EthernetAddress(e)) => e,
         },
